@@ -2,40 +2,31 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Johnny Jumper: Cowboy Adventure</title>
+    <title>Johnny Jumper: Hardcore Cowboy</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #332211; font-family: 'Courier New', Courier, monospace; color: #f0d9b5; }
-        canvas { display: block; background: #87CEEB; margin: auto; border: 4px solid #5d4037; }
-        #ui { position: absolute; top: 10px; left: 10px; pointer-events: none; }
+        body { margin: 0; overflow: hidden; background: #2c1b0e; font-family: 'Verdana', sans-serif; color: #f0d9b5; }
+        canvas { display: block; background: linear-gradient(#87CEEB, #e0f6ff); margin: auto; border: 5px solid #5d4037; }
+        #ui { position: absolute; top: 10px; width: 100%; text-align: center; pointer-events: none; font-weight: bold; font-size: 20px; text-shadow: 2px 2px #000; }
         .menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-                background: rgba(93, 64, 55, 0.95); padding: 30px; border: 4px solid #f0d9b5; text-align: center; }
-        button { background: #8d6e63; border: 2px solid #f0d9b5; color: white; padding: 10px 20px; cursor: pointer; margin: 5px; }
+                background: #5d4037; padding: 30px; border: 4px solid #f0d9b5; text-align: center; box-shadow: 0 0 50px #000; }
+        button { background: #d2b48c; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; margin: 5px; border-bottom: 4px solid #8d6e63; }
+        button:hover { background: #f0d9b5; }
         .hidden { display: none; }
-        .skin-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-<div id="ui">
-    <div id="stats">Level: 1 | Tode: 0</div>
-</div>
+<div id="ui">Level: <span id="lvl-txt">1</span> | Tode: <span id="death-txt">0</span></div>
 
 <div id="main-menu" class="menu">
     <h1>🤠 JOHNNY JUMPER 🤠</h1>
-    <p>Hilf Johnny durch 50 Wüsten-Level!</p>
-    <button onclick="startGame()">MISSION STARTEN</button>
-    <button onclick="showSkins()">GARDEROBE (SKINS)</button>
-</div>
-
-<div id="skin-menu" class="menu hidden">
-    <h2>Wähle deinen Cowboy</h2>
-    <div class="skin-grid" id="skin-list"></div>
-    <button onclick="hideSkins()">ZURÜCK</button>
+    <p>Überlebe 50 Level & 2 Bosse!</p>
+    <button onclick="startGame()">JETZT REITEN</button>
 </div>
 
 <div id="game-over" class="menu hidden">
-    <h1 id="over-title">GESTORBEN!</h1>
-    <button onclick="restartLevel()">ERNEUT VERSUCHEN</button>
+    <h1 style="color: #ff4444;">VOM SATTEL GEFALLEN!</h1>
+    <button onclick="restartLevel()">NOCHMAL PROBIEREN</button>
 </div>
 
 <canvas id="gameCanvas"></canvas>
@@ -44,218 +35,200 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Spiel-Konstanten
-canvas.width = 800;
-canvas.height = 400;
-const GRAVITY = 0.5;
-const FRICTION = 0.8;
+canvas.width = 1000;
+canvas.height = 500;
+
+const GRAVITY = 0.6;
+const FRICTION = 0.85;
 
 let currentLevel = 1;
 let deaths = 0;
 let gameState = 'MENU';
 let keys = {};
+let cameraX = 0;
 
-// Johnny (Spieler)
 let player = {
-    x: 50, y: 300, w: 30, h: 45,
-    vx: 0, vy: 0,
-    jumpPower: -12,
-    speed: 5,
-    grounded: false,
-    color: '#ffcc00',
-    hatColor: '#5d4037',
-    shape: 'rect'
+    x: 100, y: 300, w: 30, h: 45, vx: 0, vy: 0,
+    speed: 6, jumpPower: -13, grounded: false
 };
 
-// Skins (20 Stück)
-const skins = [];
-for(let i=0; i<20; i++) {
-    skins.push({
-        id: i,
-        name: "Skin " + (i+1),
-        color: `hsl(${i * 18}, 70%, 50%)`,
-        hat: `hsl(${i * 18}, 40%, 20%)`,
-        shape: i % 3 === 0 ? 'round' : 'rect'
-    });
-}
-
-// Level-Objekte
 let platforms = [];
-let hazards = []; // Lava & Stacheln
-let cannons = [];
-let projectiles = [];
-let goal = { x: 0, y: 0, w: 40, h: 60 };
+let hazards = [];
+let entities = []; // Projektile, Bosse, Trampoline
+let boss = null;
+
+// Herausforderungs-Typen (insgesamt 20+ Mechaniken im Loop)
+const types = ['ice', 'moving', 'ghost', 'trampoline', 'wind', 'falling', 'shooter', 'spinner'];
 
 function setupLevel(lvl) {
     platforms = [];
     hazards = [];
-    cannons = [];
-    projectiles = [];
-    
-    // Boden
-    platforms.push({ x: 0, y: 380, w: 2000, h: 20, type: 'ground' });
+    entities = [];
+    boss = null;
+    cameraX = 0;
+    player.x = 100;
+    player.y = 100;
+    player.vx = 0; player.vy = 0;
 
-    // Prozedurale Level-Logik für 50 Level
-    let seed = lvl * 1337;
-    function random() {
-        seed = (seed * 9301 + 49297) % 233280;
-        return seed / 233280;
+    if (lvl === 25 || lvl === 50) {
+        setupBossLevel(lvl);
+        return;
     }
 
-    let lastX = 150;
-    for(let i=0; i < 5 + lvl; i++) {
-        let gap = 80 + random() * 100;
-        let width = 100 + random() * 100;
-        let height = 300 - random() * 150;
-        
-        platforms.push({ x: lastX, y: height, w: width, h: 20 });
-        
-        // Füge Gefahren hinzu ab Level 2
-        if(lvl > 1 && random() > 0.6) {
-            hazards.push({ x: lastX + 20, y: height - 10, w: 30, h: 10, type: 'spike' });
-        }
-        
-        // Lava am Boden
-        if(lvl > 5 && random() > 0.7) {
-            hazards.push({ x: lastX - 50, y: 380, w: 60, h: 20, type: 'lava' });
-        }
+    // Sicherer Startboden
+    platforms.push({ x: 0, y: 450, w: 300, h: 50, type: 'normal' });
 
-        // Kanonen ab Level 10
-        if(lvl > 10 && i % 4 === 0) {
-            cannons.push({ x: lastX + 10, y: height - 40, lastShot: 0 });
-        }
+    let lastX = 300;
+    for (let i = 0; i < 15 + lvl; i++) {
+        let type = types[Math.floor(Math.random() * types.length)];
+        let w = 80 + Math.random() * 100;
+        let h = 20;
+        let y = 150 + Math.random() * 250;
+        let gap = 70 + Math.random() * 80;
 
-        lastX += width + gap;
+        // Mechanik-Logik
+        let p = { x: lastX + gap, y: y, w: w, h: h, type: type, originalY: y, timer: Math.random() * 10 };
+        
+        if (type === 'moving') p.vx = 2;
+        if (type === 'shooter') entities.push({ x: p.x, y: p.y - 30, type: 'cannon', cd: 0 });
+        if (type === 'spinner') hazards.push({ x: p.x + w/2, y: p.y - 50, w: 20, h: 20, type: 'saw', angle: 0 });
+        if (type === 'trampoline') p.color = '#ff00ff';
+
+        platforms.push(p);
+        
+        // Lava-Löcher
+        if (Math.random() > 0.7) hazards.push({ x: lastX + gap, y: 480, w: gap, h: 30, type: 'lava' });
+
+        lastX = p.x + w;
     }
 
-    goal.x = lastX;
-    goal.y = 250;
-    
-    player.x = 50;
-    player.y = 300;
-    player.vx = 0;
-    player.vy = 0;
+    // Ziel
+    platforms.push({ x: lastX + 100, y: 300, w: 100, h: 200, type: 'goal' });
 }
 
-function drawPlayer() {
-    ctx.fillStyle = player.color;
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = 'rgba(0,0,0,0.3)';
-
-    if(player.shape === 'round') {
-        ctx.beginPath();
-        ctx.arc(player.x + player.w/2, player.y + player.h/2, player.w/2, 0, Math.PI*2);
-        ctx.fill();
-    } else {
-        ctx.fillRect(player.x, player.y, player.w, player.h);
-    }
-    
-    // Cowboyhut
-    ctx.fillStyle = player.hatColor;
-    ctx.fillRect(player.x - 5, player.y, player.w + 10, 8);
-    ctx.fillRect(player.x + 5, player.y - 12, player.w - 10, 15);
-    ctx.shadowBlur = 0;
+function setupBossLevel(lvl) {
+    platforms.push({ x: 0, y: 450, w: 1000, h: 50, type: 'normal' });
+    boss = { x: 700, y: 250, w: 100, h: 100, hp: 5, type: 'boss', phase: 0 };
+    document.getElementById('lvl-txt').innerText = lvl === 25 ? "BOSS: BIG BAD BILL" : "FINAL BOSS: SHADOW RIDER";
 }
 
 function update() {
-    if(gameState !== 'PLAY') return;
+    if (gameState !== 'PLAY') return;
 
-    if(keys['ArrowRight'] || keys['KeyD']) player.vx < player.speed && player.vx++;
-    if(keys['ArrowLeft'] || keys['KeyA']) player.vx > -player.speed && player.vx--;
+    // Bewegung
+    if (keys['ArrowRight'] || keys['KeyD']) player.vx += 0.8;
+    if (keys['ArrowLeft'] || keys['KeyA']) player.vx -= 0.8;
     
     player.vx *= FRICTION;
     player.vy += GRAVITY;
-    
     player.x += player.vx;
     player.y += player.vy;
     player.grounded = false;
 
-    // Kollision mit Plattformen
+    // Stabile Boden-Kollision (AABB)
     platforms.forEach(p => {
-        if(player.x < p.x + p.w && player.x + player.w > p.x &&
-           player.y + player.h > p.y && player.y + player.h < p.y + p.vy + 10) {
+        if (player.x + player.w > p.x && player.x < p.x + p.w &&
+            player.y + player.h > p.y && player.y + player.h < p.y + p.vy + 5) {
+            
+            if (p.type === 'goal') nextLevel();
+            
             player.grounded = true;
             player.vy = 0;
             player.y = p.y - player.h;
+
+            if (p.type === 'trampoline') player.vy = -20;
+            if (p.type === 'falling') p.y += 5;
+        }
+
+        // Plattform-Effekte
+        if (p.type === 'moving') {
+            p.x += p.vx || 0;
+            if (p.x > 3000 || p.x < 0) p.vx *= -1;
         }
     });
 
-    if((keys['Space'] || keys['ArrowUp'] || keys['KeyW']) && player.grounded) {
+    if ((keys['Space'] || keys['ArrowUp'] || keys['KeyW']) && player.grounded) {
         player.vy = player.jumpPower;
-        player.grounded = false;
     }
 
-    // Gefahren & Kanonen Logik
+    // Kamera folgt Johnny
+    cameraX = player.x - 200;
+
+    // Boss Kampf Logik
+    if (boss) {
+        boss.y += Math.sin(Date.now() / 500) * 2;
+        if (Math.random() < 0.02) {
+            entities.push({ x: boss.x, y: boss.y + 50, vx: -7, type: 'bullet' });
+        }
+        // Boss besiegen durch draufspringen
+        if (player.vy > 0 && player.x + player.w > boss.x && player.x < boss.x + boss.w &&
+            player.y + player.h > boss.y && player.y + player.h < boss.y + 20) {
+            boss.hp--;
+            player.vy = -15;
+            if (boss.hp <= 0) nextLevel();
+        }
+    }
+
+    // Entities (Kugeln, etc)
+    entities.forEach((e, i) => {
+        if (e.type === 'bullet') {
+            e.x += e.vx;
+            if (player.x < e.x + 10 && player.x + player.w > e.x && player.y < e.y + 10 && player.y + player.h > e.y) die();
+        }
+        if (e.type === 'cannon') {
+            e.cd++;
+            if (e.cd > 100) { entities.push({ x: e.x, y: e.y, vx: -5, type: 'bullet' }); e.cd = 0; }
+        }
+    });
+
+    // Tod durch Lava oder Herunterfallen
+    if (player.y > canvas.height + 100) die();
     hazards.forEach(h => {
-        if(player.x < h.x + h.w && player.x + player.w > h.x && player.y < h.y + h.h && player.y + player.h > h.y) {
-            die();
-        }
+        if (player.x < h.x + h.w && player.x + player.w > h.x && player.y < h.y + h.h && player.y + player.h > h.y) die();
     });
-
-    cannons.forEach(c => {
-        if(Date.now() - c.lastShot > 2000) {
-            projectiles.push({ x: c.x, y: c.y + 10, vx: -4 });
-            c.lastShot = Date.now();
-        }
-    });
-
-    projectiles.forEach((p, i) => {
-        p.x += p.vx;
-        if(player.x < p.x + 10 && player.x + player.w > p.x && player.y < p.y + 10 && player.y + player.h > p.y) {
-            die();
-        }
-        if(p.x < -100) projectiles.splice(i, 1);
-    });
-
-    // Ziel erreicht
-    if(player.x < goal.x + goal.w && player.x + player.w > goal.x && player.y < goal.y + goal.h && player.y + player.h > goal.y) {
-        nextLevel();
-    }
-
-    // Aus dem Level gefallen
-    if(player.y > canvas.height) die();
 }
 
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Wüstenhintergrund (Berge)
-    ctx.fillStyle = '#d2b48c';
-    ctx.beginPath();
-    ctx.moveTo(0, 400); ctx.lineTo(200, 150); ctx.lineTo(400, 400);
-    ctx.moveTo(300, 400); ctx.lineTo(600, 100); ctx.lineTo(900, 400);
-    ctx.fill();
-
-    // Kamera-Verschiebung (Johnny folgen)
     ctx.save();
-    ctx.translate(-player.x + 100, 0);
+    ctx.translate(-cameraX, 0);
 
-    // Plattformen
+    // Hintergrund-Berge
+    ctx.fillStyle = '#8b4513';
+    ctx.fillRect(player.x - 500, 450, 2000, 50);
+
     platforms.forEach(p => {
-        ctx.fillStyle = p.type === 'ground' ? '#3e2723' : '#5d4037';
+        ctx.fillStyle = (p.type === 'normal' || p.type === 'goal') ? '#5d4037' : '#8d6e63';
+        if (p.type === 'ice') ctx.fillStyle = '#b3e5fc';
+        if (p.type === 'trampoline') ctx.fillStyle = '#e91e63';
+        if (p.type === 'falling') ctx.fillStyle = '#ff9800';
         ctx.fillRect(p.x, p.y, p.w, p.h);
+        if (p.type === 'goal') { ctx.fillStyle = '#000'; ctx.fillText("SALOON", p.x + 20, p.y + 50); }
     });
 
-    // Gefahren
     hazards.forEach(h => {
-        ctx.fillStyle = h.type === 'spike' ? '#999' : '#ff4400';
+        ctx.fillStyle = h.type === 'lava' ? '#ff4500' : '#333';
         ctx.fillRect(h.x, h.y, h.w, h.h);
     });
 
-    // Kanonen & Projektile
-    ctx.fillStyle = '#333';
-    cannons.forEach(c => ctx.fillRect(c.x, c.y, 30, 30));
-    projectiles.forEach(p => {
-        ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI*2); ctx.fill();
+    entities.forEach(e => {
+        if (e.type === 'bullet') { ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(e.x, e.y, 5, 0, Math.PI*2); ctx.fill(); }
+        if (e.type === 'cannon') { ctx.fillStyle = '#222'; ctx.fillRect(e.x, e.y, 30, 20); }
     });
 
-    // Ziel (Saloon-Tür)
-    ctx.fillStyle = '#221100';
-    ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
-    ctx.fillStyle = '#f0d9b5';
-    ctx.fillText("SALOON", goal.x, goal.y - 10);
+    if (boss) {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(boss.x, boss.y, boss.w, boss.h);
+        ctx.fillStyle = '#fff';
+        ctx.fillText("BOSS HP: " + boss.hp, boss.x, boss.y - 10);
+    }
 
-    drawPlayer();
+    // Johnny Zeichnen
+    ctx.fillStyle = '#ffcc00';
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    ctx.fillStyle = '#5d4037';
+    ctx.fillRect(player.x - 5, player.y, player.w + 10, 10); // Hut
+
     ctx.restore();
 }
 
@@ -263,35 +236,20 @@ function die() {
     deaths++;
     gameState = 'OVER';
     document.getElementById('game-over').classList.remove('hidden');
-    updateHUD();
+    document.getElementById('death-txt').innerText = deaths;
 }
 
 function nextLevel() {
     currentLevel++;
-    if(currentLevel > 50) {
-        alert("GEWONNEN! Du bist der schnellste Cowboy!");
-        currentLevel = 1;
-    }
+    document.getElementById('lvl-txt').innerText = currentLevel;
     setupLevel(currentLevel);
-    updateHUD();
 }
 
-function updateHUD() {
-    document.getElementById('stats').innerText = `Level: ${currentLevel} | Tode: ${deaths}`;
-}
-
-function gameLoop() {
-    update();
-    draw();
-    requestAnimationFrame(gameLoop);
-}
-
-// Menü-Steuerung
 function startGame() {
     document.getElementById('main-menu').classList.add('hidden');
     gameState = 'PLAY';
-    currentLevel = 1;
     setupLevel(currentLevel);
+    gameLoop();
 }
 
 function restartLevel() {
@@ -300,33 +258,15 @@ function restartLevel() {
     gameState = 'PLAY';
 }
 
-function showSkins() {
-    document.getElementById('main-menu').classList.add('hidden');
-    document.getElementById('skin-menu').classList.remove('hidden');
-    const list = document.getElementById('skin-list');
-    list.innerHTML = '';
-    skins.forEach(s => {
-        const btn = document.createElement('button');
-        btn.style.backgroundColor = s.color;
-        btn.innerText = s.name;
-        btn.onclick = () => {
-            player.color = s.color;
-            player.hatColor = s.hat;
-            player.shape = s.shape;
-        };
-        list.appendChild(btn);
-    });
-}
-
-function hideSkins() {
-    document.getElementById('skin-menu').classList.add('hidden');
-    document.getElementById('main-menu').classList.remove('hidden');
+function gameLoop() {
+    update();
+    draw();
+    if (gameState !== 'MENU') requestAnimationFrame(gameLoop);
 }
 
 window.addEventListener('keydown', e => keys[e.code] = true);
 window.addEventListener('keyup', e => keys[e.code] = false);
 
-gameLoop();
 </script>
 </body>
 </html>
