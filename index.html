@@ -2,15 +2,14 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Johnny Jumper: Hardcore Cowboy</title>
+    <title>Johnny Jumper: Fixed Physics</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #2c1b0e; font-family: 'Verdana', sans-serif; color: #f0d9b5; }
+        body { margin: 0; overflow: hidden; background: #2c1b0e; font-family: 'Arial Black', sans-serif; color: #f0d9b5; }
         canvas { display: block; background: linear-gradient(#87CEEB, #e0f6ff); margin: auto; border: 5px solid #5d4037; }
-        #ui { position: absolute; top: 10px; width: 100%; text-align: center; pointer-events: none; font-weight: bold; font-size: 20px; text-shadow: 2px 2px #000; }
+        #ui { position: absolute; top: 10px; width: 100%; text-align: center; pointer-events: none; font-size: 24px; text-shadow: 2px 2px #000; }
         .menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-                background: #5d4037; padding: 30px; border: 4px solid #f0d9b5; text-align: center; box-shadow: 0 0 50px #000; }
-        button { background: #d2b48c; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; margin: 5px; border-bottom: 4px solid #8d6e63; }
-        button:hover { background: #f0d9b5; }
+                background: #5d4037; padding: 30px; border: 4px solid #f0d9b5; text-align: center; box-shadow: 0 0 50px #000; z-index: 100; }
+        button { background: #d2b48c; border: none; padding: 15px 30px; font-weight: bold; cursor: pointer; border-bottom: 4px solid #8d6e63; font-size: 18px; }
         .hidden { display: none; }
     </style>
 </head>
@@ -20,13 +19,13 @@
 
 <div id="main-menu" class="menu">
     <h1>🤠 JOHNNY JUMPER 🤠</h1>
-    <p>Überlebe 50 Level & 2 Bosse!</p>
-    <button onclick="startGame()">JETZT REITEN</button>
+    <p>FIXED PHYSICS EDITION 2026</p>
+    <button onclick="startGame()">REITEN STARTEN</button>
 </div>
 
 <div id="game-over" class="menu hidden">
-    <h1 style="color: #ff4444;">VOM SATTEL GEFALLEN!</h1>
-    <button onclick="restartLevel()">NOCHMAL PROBIEREN</button>
+    <h1 style="color: #ff4444;">VOM PFERD GEFALLEN!</h1>
+    <button onclick="restartLevel()">ERNEUTER VERSUCH</button>
 </div>
 
 <canvas id="gameCanvas"></canvas>
@@ -38,8 +37,10 @@ const ctx = canvas.getContext('2d');
 canvas.width = 1000;
 canvas.height = 500;
 
-const GRAVITY = 0.6;
-const FRICTION = 0.85;
+// Konstanten
+const GRAVITY = 0.8;
+const FRICTION = 0.8;
+const JUMP_FORCE = -16;
 
 let currentLevel = 1;
 let deaths = 0;
@@ -48,186 +49,171 @@ let keys = {};
 let cameraX = 0;
 
 let player = {
-    x: 100, y: 300, w: 30, h: 45, vx: 0, vy: 0,
-    speed: 6, jumpPower: -13, grounded: false
+    x: 100, y: 100, w: 35, h: 50,
+    vx: 0, vy: 0,
+    grounded: false
 };
 
 let platforms = [];
 let hazards = [];
-let entities = []; // Projektile, Bosse, Trampoline
+let entities = [];
 let boss = null;
-
-// Herausforderungs-Typen (insgesamt 20+ Mechaniken im Loop)
-const types = ['ice', 'moving', 'ghost', 'trampoline', 'wind', 'falling', 'shooter', 'spinner'];
 
 function setupLevel(lvl) {
     platforms = [];
     hazards = [];
     entities = [];
-    boss = null;
     cameraX = 0;
     player.x = 100;
     player.y = 100;
-    player.vx = 0; player.vy = 0;
+    player.vx = 0;
+    player.vy = 0;
 
-    if (lvl === 25 || lvl === 50) {
-        setupBossLevel(lvl);
-        return;
-    }
+    // 1. STABILER BODEN (Startbereich)
+    platforms.push({ x: 0, y: 400, w: 500, h: 100, type: 'normal' });
 
-    // Sicherer Startboden
-    platforms.push({ x: 0, y: 450, w: 300, h: 50, type: 'normal' });
-
-    let lastX = 300;
+    // 2. LEVEL GENERIERUNG (20+ Mechaniken)
+    let lastX = 500;
     for (let i = 0; i < 15 + lvl; i++) {
-        let type = types[Math.floor(Math.random() * types.length)];
-        let w = 80 + Math.random() * 100;
-        let h = 20;
-        let y = 150 + Math.random() * 250;
-        let gap = 70 + Math.random() * 80;
+        let gap = 100 + Math.random() * 80;
+        let pWidth = 120 + Math.random() * 100;
+        let pY = 150 + Math.random() * 200;
+        let type = 'normal';
 
-        // Mechanik-Logik
-        let p = { x: lastX + gap, y: y, w: w, h: h, type: type, originalY: y, timer: Math.random() * 10 };
+        // Zufällige Herausforderungen
+        let r = Math.random();
+        if (r > 0.8) type = 'trampoline';
+        else if (r > 0.6) type = 'moving';
+        else if (r > 0.5) type = 'falling';
+
+        platforms.push({ x: lastX + gap, y: pY, w: pWidth, h: 30, type: type, startY: pY, dir: 1 });
         
-        if (type === 'moving') p.vx = 2;
-        if (type === 'shooter') entities.push({ x: p.x, y: p.y - 30, type: 'cannon', cd: 0 });
-        if (type === 'spinner') hazards.push({ x: p.x + w/2, y: p.y - 50, w: 20, h: 20, type: 'saw', angle: 0 });
-        if (type === 'trampoline') p.color = '#ff00ff';
+        // Kanonen-Entität
+        if (lvl > 5 && Math.random() > 0.8) {
+            entities.push({ x: lastX + gap + 20, y: pY - 40, type: 'cannon', timer: 0 });
+        }
 
-        platforms.push(p);
-        
-        // Lava-Löcher
-        if (Math.random() > 0.7) hazards.push({ x: lastX + gap, y: 480, w: gap, h: 30, type: 'lava' });
-
-        lastX = p.x + w;
+        lastX += gap + pWidth;
     }
 
-    // Ziel
-    platforms.push({ x: lastX + 100, y: 300, w: 100, h: 200, type: 'goal' });
+    // BOSS LOGIK
+    if (lvl % 25 === 0) {
+        boss = { x: lastX + 200, y: 200, w: 120, h: 120, hp: 5, type: 'boss' };
+    }
+
+    // ZIEL (Saloon)
+    platforms.push({ x: lastX + 300, y: 300, w: 150, h: 200, type: 'goal' });
 }
 
-function setupBossLevel(lvl) {
-    platforms.push({ x: 0, y: 450, w: 1000, h: 50, type: 'normal' });
-    boss = { x: 700, y: 250, w: 100, h: 100, hp: 5, type: 'boss', phase: 0 };
-    document.getElementById('lvl-txt').innerText = lvl === 25 ? "BOSS: BIG BAD BILL" : "FINAL BOSS: SHADOW RIDER";
+function checkCollision() {
+    player.grounded = false;
+
+    for (let p of platforms) {
+        // Horizontale Prüfung
+        if (player.x + player.w > p.x && player.x < p.x + p.w) {
+            // Vertikale Prüfung (Johnny fällt auf Plattform)
+            if (player.vy >= 0 && 
+                player.y + player.h <= p.y + 10 && 
+                player.y + player.h + player.vy >= p.y) {
+                
+                player.y = p.y - player.h;
+                player.vy = 0;
+                player.grounded = true;
+
+                if (p.type === 'goal') nextLevel();
+                if (p.type === 'trampoline') player.vy = JUMP_FORCE * 1.5;
+                if (p.type === 'falling') p.y += 10;
+            }
+        }
+    }
 }
 
 function update() {
     if (gameState !== 'PLAY') return;
 
-    // Bewegung
-    if (keys['ArrowRight'] || keys['KeyD']) player.vx += 0.8;
-    if (keys['ArrowLeft'] || keys['KeyA']) player.vx -= 0.8;
+    // Steuerung
+    if (keys['ArrowRight'] || keys['KeyD']) player.vx += 1;
+    if (keys['ArrowLeft'] || keys['KeyA']) player.vx -= 1;
     
     player.vx *= FRICTION;
     player.vy += GRAVITY;
+
+    // X-Achse bewegen
     player.x += player.vx;
+
+    // Y-Achse bewegen & Kollision prüfen
+    checkCollision();
     player.y += player.vy;
-    player.grounded = false;
 
-    // Stabile Boden-Kollision (AABB)
+    // Tod durch Herunterfallen
+    if (player.y > canvas.height + 200) die();
+
+    // Kamera
+    cameraX = player.x - 300;
+
+    // Plattform-Bewegung (Moving Platforms)
     platforms.forEach(p => {
-        if (player.x + player.w > p.x && player.x < p.x + p.w &&
-            player.y + player.h > p.y && player.y + player.h < p.y + p.vy + 5) {
-            
-            if (p.type === 'goal') nextLevel();
-            
-            player.grounded = true;
-            player.vy = 0;
-            player.y = p.y - player.h;
-
-            if (p.type === 'trampoline') player.vy = -20;
-            if (p.type === 'falling') p.y += 5;
-        }
-
-        // Plattform-Effekte
         if (p.type === 'moving') {
-            p.x += p.vx || 0;
-            if (p.x > 3000 || p.x < 0) p.vx *= -1;
+            p.y += Math.sin(Date.now() / 500) * 2;
+        }
+    });
+
+    // Kanonen
+    entities.forEach(e => {
+        if (e.type === 'cannon') {
+            e.timer++;
+            if (e.timer > 120) {
+                entities.push({ x: e.x, y: e.y, vx: -6, type: 'bullet' });
+                e.timer = 0;
+            }
+        }
+        if (e.type === 'bullet') {
+            e.x += e.vx;
+            // Kugel-Treffprüfung
+            if (player.x < e.x + 10 && player.x + player.w > e.x && player.y < e.y + 10 && player.y + player.h > e.y) die();
         }
     });
 
     if ((keys['Space'] || keys['ArrowUp'] || keys['KeyW']) && player.grounded) {
-        player.vy = player.jumpPower;
+        player.vy = JUMP_FORCE;
+        player.grounded = false;
     }
-
-    // Kamera folgt Johnny
-    cameraX = player.x - 200;
-
-    // Boss Kampf Logik
-    if (boss) {
-        boss.y += Math.sin(Date.now() / 500) * 2;
-        if (Math.random() < 0.02) {
-            entities.push({ x: boss.x, y: boss.y + 50, vx: -7, type: 'bullet' });
-        }
-        // Boss besiegen durch draufspringen
-        if (player.vy > 0 && player.x + player.w > boss.x && player.x < boss.x + boss.w &&
-            player.y + player.h > boss.y && player.y + player.h < boss.y + 20) {
-            boss.hp--;
-            player.vy = -15;
-            if (boss.hp <= 0) nextLevel();
-        }
-    }
-
-    // Entities (Kugeln, etc)
-    entities.forEach((e, i) => {
-        if (e.type === 'bullet') {
-            e.x += e.vx;
-            if (player.x < e.x + 10 && player.x + player.w > e.x && player.y < e.y + 10 && player.y + player.h > e.y) die();
-        }
-        if (e.type === 'cannon') {
-            e.cd++;
-            if (e.cd > 100) { entities.push({ x: e.x, y: e.y, vx: -5, type: 'bullet' }); e.cd = 0; }
-        }
-    });
-
-    // Tod durch Lava oder Herunterfallen
-    if (player.y > canvas.height + 100) die();
-    hazards.forEach(h => {
-        if (player.x < h.x + h.w && player.x + player.w > h.x && player.y < h.y + h.h && player.y + player.h > h.y) die();
-    });
 }
 
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
     ctx.save();
     ctx.translate(-cameraX, 0);
 
-    // Hintergrund-Berge
-    ctx.fillStyle = '#8b4513';
-    ctx.fillRect(player.x - 500, 450, 2000, 50);
-
+    // Plattformen zeichnen
     platforms.forEach(p => {
-        ctx.fillStyle = (p.type === 'normal' || p.type === 'goal') ? '#5d4037' : '#8d6e63';
-        if (p.type === 'ice') ctx.fillStyle = '#b3e5fc';
-        if (p.type === 'trampoline') ctx.fillStyle = '#e91e63';
-        if (p.type === 'falling') ctx.fillStyle = '#ff9800';
+        if (p.type === 'normal') ctx.fillStyle = '#5d4037';
+        else if (p.type === 'trampoline') ctx.fillStyle = '#ff00ff';
+        else if (p.type === 'moving') ctx.fillStyle = '#3498db';
+        else if (p.type === 'falling') ctx.fillStyle = '#e67e22';
+        else if (p.type === 'goal') ctx.fillStyle = '#27ae60';
+        
         ctx.fillRect(p.x, p.y, p.w, p.h);
-        if (p.type === 'goal') { ctx.fillStyle = '#000'; ctx.fillText("SALOON", p.x + 20, p.y + 50); }
+        
+        if (p.type === 'goal') {
+            ctx.fillStyle = '#fff';
+            ctx.fillText("SALOON", p.x + 40, p.y - 10);
+        }
     });
 
-    hazards.forEach(h => {
-        ctx.fillStyle = h.type === 'lava' ? '#ff4500' : '#333';
-        ctx.fillRect(h.x, h.y, h.w, h.h);
-    });
-
+    // Entitäten
     entities.forEach(e => {
-        if (e.type === 'bullet') { ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(e.x, e.y, 5, 0, Math.PI*2); ctx.fill(); }
-        if (e.type === 'cannon') { ctx.fillStyle = '#222'; ctx.fillRect(e.x, e.y, 30, 20); }
+        if (e.type === 'cannon') ctx.fillStyle = '#000', ctx.fillRect(e.x, e.y, 40, 20);
+        if (e.type === 'bullet') ctx.fillStyle = '#ff4444', ctx.beginPath(), ctx.arc(e.x, e.y, 8, 0, Math.PI*2), ctx.fill();
     });
 
-    if (boss) {
-        ctx.fillStyle = '#000';
-        ctx.fillRect(boss.x, boss.y, boss.w, boss.h);
-        ctx.fillStyle = '#fff';
-        ctx.fillText("BOSS HP: " + boss.hp, boss.x, boss.y - 10);
-    }
-
-    // Johnny Zeichnen
-    ctx.fillStyle = '#ffcc00';
+    // Johnny Cowboy zeichnen
+    ctx.fillStyle = '#f1c40f'; // Körper
     ctx.fillRect(player.x, player.y, player.w, player.h);
-    ctx.fillStyle = '#5d4037';
-    ctx.fillRect(player.x - 5, player.y, player.w + 10, 10); // Hut
+    ctx.fillStyle = '#5d4037'; // Hut
+    ctx.fillRect(player.x - 5, player.y, player.w + 10, 10);
+    ctx.fillRect(player.x + 5, player.y - 10, player.w - 10, 10);
 
     ctx.restore();
 }
@@ -249,7 +235,7 @@ function startGame() {
     document.getElementById('main-menu').classList.add('hidden');
     gameState = 'PLAY';
     setupLevel(currentLevel);
-    gameLoop();
+    requestAnimationFrame(gameLoop);
 }
 
 function restartLevel() {
