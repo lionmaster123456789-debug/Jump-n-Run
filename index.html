@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Johnny Jumper: Reachable Peaks</title>
+    <title>Johnny Jumper: Optimized Horizontal Reach</title>
     <style>
         body { margin: 0; overflow: hidden; background: #2c1b0e; font-family: 'Arial Black', sans-serif; color: #f0d9b5; }
         canvas { display: block; background: linear-gradient(#87CEEB, #e0f6ff); margin: auto; border: 5px solid #5d4037; }
@@ -19,8 +19,8 @@
 
 <div id="main-menu" class="menu">
     <h1>🤠 JOHNNY JUMPER 🤠</h1>
-    <p>VERSION 2026: GARANTIERTE SPRÜNGE</p>
-    <button onclick="startGame()">JETZT REITEN</button>
+    <p>VERSION 2026: OPTIMIERTE SPRÜNGE</p>
+    <button onclick="startGame()">REITEN STARTEN</button>
 </div>
 
 <div id="game-over" class="menu hidden">
@@ -39,7 +39,8 @@ canvas.height = 500;
 
 const GRAVITY = 0.7;
 const FRICTION = 0.8;
-const JUMP_FORCE = -17; // Verstärkt für sicherere Sprünge
+const JUMP_FORCE = -17; 
+const PLAYER_SPEED = 7; // Geschwindigkeit leicht erhöht
 
 let currentLevel = 1;
 let deaths = 0;
@@ -65,20 +66,18 @@ function setupLevel(lvl) {
     player.vx = 0;
     player.vy = 0;
 
-    // Startplattform
     let lastP = { x: 0, y: 400, w: 400, h: 100, type: 'normal' };
     platforms.push(lastP);
 
-    // Intelligente Level-Generierung
     let levelLength = 15 + lvl;
     for (let i = 0; i < levelLength; i++) {
-        // Berechne maximale Reichweite (Johnny kann ca. 250px weit und 180px hoch springen)
-        let gapX = 120 + Math.random() * 130; 
-        let diffY = (Math.random() * 140) - 70; // Variation zwischen -70 (hoch) und +70 (runter)
+        // HORIZONTALE LÜCKE BEGRENZT: Maximal 230px, da Johnny das locker schafft
+        let gapX = 100 + Math.random() * 130; 
+        
+        // VERTIKALE HÖHE BEGRENZT: Immer erreichbar
+        let diffY = (Math.random() * 140) - 70; 
         
         let newY = lastP.y + diffY;
-        
-        // Grenzen einhalten, damit Plattformen nicht aus dem Bild fliegen
         if (newY < 120) newY = 120;
         if (newY > 420) newY = 420;
 
@@ -92,22 +91,18 @@ function setupLevel(lvl) {
         lastP = { x: lastP.x + lastP.w + gapX, y: newY, w: pWidth, h: 30, type: type };
         platforms.push(lastP);
         
-        // Kanonen-Gegner
         if (lvl > 3 && Math.random() > 0.85) {
             entities.push({ x: lastP.x + 20, y: lastP.y - 40, type: 'cannon', timer: 0 });
         }
     }
 
-    // Ziel-Saloon am Ende
     platforms.push({ x: lastP.x + lastP.w + 150, y: 300, w: 200, h: 200, type: 'goal' });
 }
 
 function checkCollision() {
     player.grounded = false;
     for (let p of platforms) {
-        // Prüfe ob Spieler über der Plattform ist
         if (player.x + player.w > p.x && player.x < p.x + p.w) {
-            // Präzise Landung: Wenn Füße die Oberkante berühren
             if (player.vy >= 0 && 
                 player.y + player.h <= p.y + 15 && 
                 player.y + player.h + player.vy >= p.y) {
@@ -127,27 +122,28 @@ function checkCollision() {
 function update() {
     if (gameState !== 'PLAY') return;
 
-    if (keys['ArrowRight'] || keys['KeyD']) player.vx += 0.9;
-    if (keys['ArrowLeft'] || keys['KeyA']) player.vx -= 0.9;
+    if (keys['ArrowRight'] || keys['KeyD']) player.vx += 1;
+    if (keys['ArrowLeft'] || keys['KeyA']) player.vx -= 1;
     
+    // Maximale Geschwindigkeit begrenzen
     player.vx *= FRICTION;
+    if (Math.abs(player.vx) > PLAYER_SPEED) player.vx = Math.sign(player.vx) * PLAYER_SPEED;
+
     player.vy += GRAVITY;
 
     player.x += player.vx;
-    checkCollision(); // Kollision VOR der Y-Bewegung prüfen für Stabilität
+    checkCollision(); 
     player.y += player.vy;
 
     if (player.y > canvas.height + 200) die();
     cameraX = player.x - 300;
 
-    // Plattform-Animationen
     platforms.forEach(p => {
         if (p.type === 'moving') {
             p.y += Math.sin(Date.now() / 400) * 3;
         }
     });
 
-    // Projektil-Logik
     entities.forEach((e, index) => {
         if (e.type === 'cannon') {
             e.timer++;
@@ -183,9 +179,9 @@ function draw() {
         
         ctx.fillRect(p.x, p.y, p.w, p.h);
         if (p.type === 'goal') {
-            ctx.fillStyle = '#000';
+            ctx.fillStyle = '#fff';
             ctx.font = "bold 20px Arial";
-            ctx.fillText("SALOON", p.x + 60, p.y + 50);
+            ctx.fillText("SALOON", p.x + 60, p.y - 10);
         }
     });
 
@@ -194,7 +190,6 @@ function draw() {
         if (e.type === 'bullet') { ctx.fillStyle = '#ff1111'; ctx.beginPath(); ctx.arc(e.x, e.y, 8, 0, Math.PI*2); ctx.fill(); }
     });
 
-    // Johnny
     ctx.fillStyle = '#f1c40f';
     ctx.fillRect(player.x, player.y, player.w, player.h);
     ctx.fillStyle = '#5d4037'; // Hut
