@@ -2,14 +2,14 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Johnny Jumper: Lava Flow Edition 2026</title>
+    <title>Johnny Jumper: Waterfall Edition 2026</title>
     <style>
         body { margin: 0; overflow: hidden; background: #1a0f00; font-family: 'Arial Black', sans-serif; }
         canvas { display: block; background: linear-gradient(#4facfe 0%, #00f2fe 100%); margin: auto; border: 6px solid #3e2723; }
         #ui { position: absolute; top: 15px; width: 100%; text-align: center; pointer-events: none; color: #fff; font-size: 28px; text-shadow: 3px 3px #000; z-index: 10; }
         .menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #3e2723; padding: 30px; border: 5px solid #fdd835; text-align: center; color: white; border-radius: 20px; z-index: 100; max-height: 80vh; overflow-y: auto; }
         button { background: #fdd835; border: none; padding: 12px 25px; font-weight: bold; cursor: pointer; font-size: 18px; border-radius: 8px; margin: 5px; }
-        .skin-btn { width: 40px; height: 40px; border: 2px solid white; display: inline-block; cursor: pointer; margin: 5px; }
+        .skin-btn { width: 40px; height: 40px; border: 2px solid white; display: inline-block; cursor: pointer; margin: 5px; border-radius: 50%; }
         .hidden { display: none; }
     </style>
 </head>
@@ -20,12 +20,12 @@
 <div id="main-menu" class="menu">
     <h1>🤠 JOHNNY JUMPER 🤠</h1>
     <div id="skin-select"><p>Skin wählen:</p></div>
-    <button onclick="startGame()">REITEN STARTEN</button>
+    <button onclick="startGame()">MISSION STARTEN</button>
 </div>
 
 <div id="game-over" class="menu hidden">
-    <h1 style="color: #ff3d00;">IN DIE LAVA GEFALLEN!</h1>
-    <button onclick="restartLevel()">NOCHMAL</button>
+    <h1>VOM PFERD GEFALLEN!</h1>
+    <button onclick="restartLevel()">ERNEUTER VERSUCH</button>
 </div>
 
 <canvas id="gameCanvas"></canvas>
@@ -56,19 +56,19 @@ let platforms = [];
 let entities = [];
 let skins = [
     { name: "Classic", color: "#fdd835", shape: "rect" },
-    { name: "Night", color: "#2c3e50", shape: "rect" },
-    { name: "Slime", color: "#00ff00", shape: "circle" },
-    { name: "Gold", color: "#f1c40f", shape: "star" }
+    { name: "Neon", color: "#00ff00", shape: "rect" },
+    { name: "Blob", color: "#ff00ff", shape: "circle" },
+    { name: "Star", color: "#f1c40f", shape: "star" }
 ];
 
-const themes = ['normal', 'ice', 'belt_left', 'belt_right', 'trampoline', 'falling', 'water', 'lava'];
+const themes = ['normal', 'ice', 'belt_left', 'belt_right', 'trampoline', 'falling', 'waterfall'];
 
 function setupLevel(lvl) {
     platforms = []; entities = [];
     cameraX = 0;
     player.x = 100; player.y = 300; player.vx = 0; player.vy = 0;
 
-    // Sicherer Startblock
+    // Start-Plattform
     platforms.push({ x: 0, y: 450, w: 400, h: 150, type: 'normal' });
 
     if (lvl % 10 === 0) { setupBoss(lvl); return; }
@@ -77,7 +77,7 @@ function setupLevel(lvl) {
     for (let i = 0; i < 15 + lvl; i++) {
         let type = themes[Math.floor(Math.random() * themes.length)];
         
-        // Distanz-Garantie 2026
+        // Mathematisch garantierte Distanzen für 2026
         let gapX = 110 + Math.random() * 90; 
         let diffY = (Math.random() * 100) - 50; 
         
@@ -85,13 +85,13 @@ function setupLevel(lvl) {
         let nY = Math.max(180, Math.min(500, lastP.y + diffY));
         let nW = 150 + Math.random() * 100;
 
-        // Wenn Lava, dann machen wir sie schmaler, damit man drüber springen kann
-        if(type === 'lava') nW = 80;
+        // Wasserfall-Eigenschaften (schmaler und hoch)
+        if(type === 'waterfall') nW = 60;
 
-        let p = { x: nX, y: nY, w: nW, h: 40, type: type, startY: nY, startX: nX };
+        let p = { x: nX, y: nY, w: nW, h: type === 'waterfall' ? 600 : 40, type: type, startY: nY };
         platforms.push(p);
 
-        if (lvl > 3 && Math.random() > 0.8 && type !== 'lava' && type !== 'water') {
+        if (lvl > 3 && Math.random() > 0.8 && type !== 'waterfall') {
             entities.push({ x: nX + 20, y: nY - 30, type: 'cannon', cd: 0 });
         }
         lastP = p;
@@ -108,13 +108,15 @@ function setupBoss(lvl) {
 function update() {
     if (gameState !== 'PLAY') return;
 
+    // Steuerung (kein Geschwindigkeitsverlust im Sprung)
     if (keys['ArrowRight'] || keys['KeyD']) player.vx += 1.0;
     if (keys['ArrowLeft'] || keys['KeyA']) player.vx -= 1.0;
     player.vx *= (player.ice ? 0.98 : FRICTION);
     
+    // Wasser-Physik (Schwimmen)
     if (player.inWater) {
-        player.vy += 0.2;
-        if (keys['Space'] || keys['ArrowUp'] || keys['KeyW']) player.vy = -4;
+        player.vy = 2; // Sanftes Sinken
+        if (keys['Space'] || keys['ArrowUp'] || keys['KeyW']) player.vy = -6; // Aktives Hochpaddeln
     } else {
         player.vy += GRAVITY;
     }
@@ -127,24 +129,19 @@ function update() {
     player.onBelt = 0;
     player.ice = false;
 
+    // Präzise Kollisionsschleife
     for (let s = 0; s < steps; s++) {
         player.y += player.vy / steps;
         
         for (let p of platforms) {
-            // AABB Kollision
             if (player.x + player.w > p.x && player.x < p.x + p.w && player.y + player.h > p.y && player.y < p.y + p.h) {
                 
-                if (p.type === 'lava') {
-                    die(); // Man stirbt, aber es gibt keinen physikalischen Widerstand (man fällt durch)
-                    continue;
-                }
-                
-                if (p.type === 'water') {
+                if (p.type === 'waterfall') {
                     player.inWater = true;
-                    continue; // Wasser blockiert die Bewegung nicht
+                    continue; // Geister-Block: Man kann durchlaufen
                 }
                 
-                // Boden-Kollision für alle anderen Typen
+                // Boden-Kollision
                 if (player.vy >= 0 && player.y + player.h <= p.y + 20) {
                     player.y = p.y - player.h;
                     player.vy = 0;
@@ -167,7 +164,6 @@ function update() {
     cameraX = Math.max(cameraX, player.x - 300);
     if (player.y > canvas.height + 200) die();
 
-    // Entitäten-Update
     entities.forEach((e, i) => {
         if (e.type === 'cannon') {
             e.cd++; if(e.cd > 100) { entities.push({x: e.x, y: e.y, vx: -7, type: 'bullet'}); e.cd = 0; }
@@ -189,14 +185,12 @@ function draw() {
     ctx.save(); ctx.translate(-cameraX, 0);
 
     platforms.forEach(p => {
-        if (p.type === 'water') {
-            ctx.fillStyle = 'rgba(0, 150, 255, 0.5)';
+        if (p.type === 'waterfall') {
+            ctx.fillStyle = 'rgba(0, 180, 255, 0.4)';
             ctx.fillRect(p.x, p.y, p.w, p.h);
-        } else if (p.type === 'lava') {
-            ctx.fillStyle = '#ff3d00';
-            ctx.shadowBlur = 15; ctx.shadowColor = "red";
-            ctx.fillRect(p.x, p.y, p.w, p.h);
-            ctx.shadowBlur = 0;
+            // Wasserfall-Effekt-Linien
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            for(let j=0; j<3; j++) ctx.fillRect(p.x + (j*20), (p.y + Date.now()/5)%p.h + p.y, 2, 20);
         } else {
             ctx.fillStyle = p.type === 'ice' ? '#81d4fa' : (p.type === 'trampoline' ? '#f06292' : (p.type === 'goal' ? '#4caf50' : '#5d4037'));
             ctx.fillRect(p.x, p.y, p.w, p.h);
@@ -210,7 +204,6 @@ function draw() {
         if (e.type === 'cannon') { ctx.fillStyle = '#212121'; ctx.fillRect(e.x, e.y, 35, 35); }
     });
 
-    // Johnny Zeichnen
     ctx.fillStyle = player.color;
     if (player.shape === 'circle') {
         ctx.beginPath(); ctx.arc(player.x + player.w/2, player.y + player.h/2, player.w/2, 0, Math.PI*2); ctx.fill();
@@ -218,7 +211,6 @@ function draw() {
         ctx.fillRect(player.x, player.y, player.w, player.h);
     }
     
-    // Cowboyhut
     ctx.fillStyle = '#3e2723';
     ctx.fillRect(player.x-5, player.y, player.w+10, 10);
     ctx.fillRect(player.x+5, player.y-10, player.w-10, 10);
