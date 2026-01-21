@@ -2,14 +2,13 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Johnny Jumper: Master Edition 2026</title>
+    <title>Johnny Jumper: Ultimate Physics Fix</title>
     <style>
         body { margin: 0; overflow: hidden; background: #1a0f00; font-family: 'Arial Black', sans-serif; }
-        canvas { display: block; background: linear-gradient(#4facfe 0%, #00f2fe 100%); margin: auto; border: 6px solid #3e2723; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
+        canvas { display: block; background: linear-gradient(#4facfe 0%, #00f2fe 100%); margin: auto; border: 6px solid #3e2723; }
         #ui { position: absolute; top: 15px; width: 100%; text-align: center; pointer-events: none; color: #fff; font-size: 28px; text-shadow: 3px 3px #000; }
         .menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #3e2723; padding: 40px; border: 5px solid #fdd835; text-align: center; color: white; border-radius: 20px; z-index: 100; }
-        button { background: #fdd835; border: none; padding: 15px 40px; font-weight: bold; cursor: pointer; font-size: 20px; border-radius: 10px; transition: 0.2s; }
-        button:hover { transform: scale(1.1); background: #fff176; }
+        button { background: #fdd835; border: none; padding: 15px 40px; font-weight: bold; cursor: pointer; font-size: 20px; border-radius: 10px; }
         .hidden { display: none; }
     </style>
 </head>
@@ -19,13 +18,13 @@
 
 <div id="main-menu" class="menu">
     <h1>🤠 JOHNNY JUMPER 🤠</h1>
-    <p>50 CHALLENGES & BOSSES</p>
+    <p>FIXED: EIS & FÖRDERBAND SPRINGEN</p>
     <button onclick="startGame()">MISSION STARTEN</button>
 </div>
 
 <div id="game-over" class="menu hidden">
-    <h1 style="color: #ff5252;">VERLOREN, PARTNER!</h1>
-    <button onclick="restartLevel()">NOCHMAL VERSUCHEN</button>
+    <h1>VERLOREN, PARTNER!</h1>
+    <button onclick="restartLevel()">ERNEUTER VERSUCH</button>
 </div>
 
 <canvas id="gameCanvas"></canvas>
@@ -36,11 +35,9 @@ const ctx = canvas.getContext('2d');
 canvas.width = 1100;
 canvas.height = 600;
 
-// Konstanten
 const GRAVITY = 0.7;
 const FRICTION = 0.85;
 const JUMP_FORCE = -16.5;
-const AIR_CONTROL = 0.6;
 
 let currentLevel = 1;
 let deaths = 0;
@@ -48,151 +45,142 @@ let gameState = 'MENU';
 let keys = {};
 let cameraX = 0;
 
-let player = { x: 100, y: 100, w: 35, h: 50, vx: 0, vy: 0, grounded: false, onBelt: 0, ice: false };
-let platforms = [];
-let hazards = [];
-let entities = [];
-let particles = [];
+let player = { 
+    x: 100, y: 100, w: 35, h: 50, 
+    vx: 0, vy: 0, 
+    grounded: false, 
+    jumpQueued: false,
+    onBelt: 0, 
+    ice: false 
+};
 
-// 50 HINDERNIS-LOGIKEN (Zufällige Kombinationen)
-const themes = ['normal', 'ice', 'belt_left', 'belt_right', 'trampoline', 'falling', 'moving_v', 'moving_h', 'ghost', 'sticky'];
+let platforms = [];
+let entities = [];
+let hazards = [];
+
+const themes = ['normal', 'ice', 'belt_left', 'belt_right', 'trampoline', 'falling', 'moving_v', 'moving_h'];
 
 function setupLevel(lvl) {
-    platforms = []; hazards = []; entities = []; particles = [];
+    platforms = []; entities = []; hazards = [];
     cameraX = 0;
     player.x = 100; player.y = 300; player.vx = 0; player.vy = 0;
 
-    // Start-Plattform
+    // Startboden
     platforms.push({ x: 0, y: 450, w: 400, h: 150, type: 'normal' });
 
-    let lastP = platforms[0];
-
     if (lvl % 10 === 0) {
-        setupBossLevel(lvl);
+        setupBoss(lvl);
         return;
     }
 
-    let levelLength = 15 + Math.floor(lvl / 2);
-    for (let i = 0; i < levelLength; i++) {
+    let lastP = platforms[0];
+    for (let i = 0; i < 15 + lvl; i++) {
         let type = themes[Math.floor(Math.random() * themes.length)];
         let gapX = 100 + Math.random() * 120;
         let diffY = (Math.random() * 120) - 60;
-        
         let nX = lastP.x + lastP.w + gapX;
         let nY = Math.max(150, Math.min(500, lastP.y + diffY));
-        let nW = 120 + Math.random() * 100;
+        let nW = 130 + Math.random() * 100;
 
-        let p = { x: nX, y: nY, w: nW, h: 30, type: type, startY: nY, startX: nX, timer: Math.random() * 10 };
+        let p = { x: nX, y: nY, w: nW, h: 35, type: type, startY: nY, startX: nX };
         platforms.push(p);
 
-        // Zusätzliche Hindernisse auf/zwischen Plattformen (Kanonen, Spikes)
-        if (lvl > 2 && Math.random() > 0.7) {
-            entities.push({ x: nX + nW/2 - 15, y: nY - 30, type: 'cannon', cd: 0 });
-        }
-        if (lvl > 5 && Math.random() > 0.8) {
-            hazards.push({ x: nX + 20, y: nY - 15, w: nW - 40, h: 15, type: 'spikes' });
-        }
-
+        if (lvl > 2 && Math.random() > 0.8) entities.push({ x: nX + 50, y: nY - 30, type: 'cannon', cd: 0 });
         lastP = p;
     }
-
-    // Ziel
     platforms.push({ x: lastP.x + lastP.w + 150, y: 350, w: 200, h: 250, type: 'goal' });
 }
 
-function setupBossLevel(lvl) {
-    platforms.push({ x: 600, y: 400, w: 400, h: 30, type: 'moving_h', startX: 600, startY: 400, timer: 0 });
-    entities.push({ x: 800, y: 150, w: 120, h: 120, type: 'boss', hp: 3 + (lvl/10), dir: 1, cd: 0 });
-    platforms.push({ x: 1400, y: 350, w: 100, h: 300, type: 'goal' });
+function setupBoss(lvl) {
+    platforms.push({ x: 500, y: 450, w: 600, h: 50, type: 'ice' }); // Boss-Arena ist rutschig!
+    entities.push({ x: 850, y: 200, w: 120, h: 120, type: 'boss', hp: 3 + (lvl/10), cd: 0 });
+    platforms.push({ x: 1300, y: 350, w: 100, h: 300, type: 'goal' });
 }
 
 function update() {
     if (gameState !== 'PLAY') return;
 
-    // Movement
-    let acc = player.grounded ? 1.2 : AIR_CONTROL;
-    if (keys['ArrowRight'] || keys['KeyD']) player.vx += acc;
-    if (keys['ArrowLeft'] || keys['KeyA']) player.vx -= acc;
+    // Horizontaler Input
+    let speedIdx = player.grounded ? 1.0 : 0.6;
+    if (keys['ArrowRight'] || keys['KeyD']) player.vx += speedIdx;
+    if (keys['ArrowLeft'] || keys['KeyA']) player.vx -= speedIdx;
 
-    // Physik-Berechnung
     player.vx *= (player.ice ? 0.98 : FRICTION);
     player.vy += GRAVITY;
     
-    // Förderband-Effekt
+    // X-Achse (Inklusive Förderband)
     player.x += player.vx + player.onBelt;
 
-    // Sub-Stepping Kollision (Präzise!)
-    let steps = 4;
+    // Y-Achse mit Sub-Stepping für Kollision
+    let steps = 5;
+    let wasGrounded = player.grounded;
     player.grounded = false;
     player.onBelt = 0;
     player.ice = false;
 
-    for(let s=0; s<steps; s++) {
+    for (let s = 0; s < steps; s++) {
         player.y += player.vy / steps;
-        platforms.forEach(p => {
+        
+        for (let p of platforms) {
             if (player.x + player.w > p.x && player.x < p.x + p.w) {
-                if (player.vy >= 0 && player.y + player.h >= p.y && player.y + player.h <= p.y + 15) {
+                // Lande-Erkennung
+                if (player.vy >= 0 && player.y + player.h >= p.y && player.y + player.h <= p.y + 20) {
                     player.y = p.y - player.h;
                     player.vy = 0;
                     player.grounded = true;
-                    // Hindernis-Eigenschaften
-                    if (p.type === 'trampoline') player.vy = JUMP_FORCE * 1.5;
-                    if (p.type === 'falling') p.y += 3;
-                    if (p.type === 'belt_right') player.onBelt = 3;
-                    if (p.type === 'belt_left') player.onBelt = -3;
+
+                    // Typ-Effekte
                     if (p.type === 'ice') player.ice = true;
+                    if (p.type === 'belt_right') player.onBelt = 4;
+                    if (p.type === 'belt_left') player.onBelt = -4;
+                    if (p.type === 'trampoline') { player.vy = JUMP_FORCE * 1.6; player.grounded = false; }
+                    if (p.type === 'falling') p.y += 2;
                     if (p.type === 'goal') nextLevel();
                 }
             }
-        });
+        }
     }
 
+    // Springen (Jetzt auch auf Eis/Bändern garantiert)
     if ((keys['Space'] || keys['ArrowUp'] || keys['KeyW']) && player.grounded) {
         player.vy = JUMP_FORCE;
+        player.grounded = false;
     }
 
-    // Kamera & Welt-Grenzen
     cameraX = Math.max(cameraX, player.x - 300);
     if (player.y > canvas.height + 100) die();
 
-    // Plattform Animationen
+    // Animationen & Gegner
     platforms.forEach(p => {
-        if (p.type === 'moving_v') p.y = p.startY + Math.sin(Date.now()/500) * 100;
-        if (p.type === 'moving_h') p.x = p.startX + Math.sin(Date.now()/800) * 150;
+        if (p.type === 'moving_v') p.y = p.startY + Math.sin(Date.now()/500) * 80;
+        if (p.type === 'moving_h') p.x = p.startX + Math.sin(Date.now()/800) * 100;
     });
 
-    // Entitäten (Bosse & Projektile)
     entities.forEach((e, i) => {
         if (e.type === 'cannon') {
-            e.cd++; if(e.cd > 120) { entities.push({x: e.x, y: e.y, vx: -6, type: 'bullet'}); e.cd = 0; }
+            e.cd++; if(e.cd > 100) { entities.push({x: e.x, y: e.y, vx: -7, type: 'bullet'}); e.cd = 0; }
         }
         if (e.type === 'bullet') {
             e.x += e.vx;
-            if (rectIntersect(player, {x: e.x, y: e.y, w: 10, h: 10})) die();
+            if (checkHit(player, {x: e.x, y: e.y, w: 10, h: 10})) die();
         }
         if (e.type === 'boss') {
-            e.x += Math.sin(Date.now()/1000) * 5;
-            e.cd++; if(e.cd > 80) { entities.push({x: e.x + 50, y: e.y + 100, vx: -5, type: 'bullet'}); e.cd = 0; }
-            // Boss besiegen
-            if (player.vy > 0 && rectIntersect(player, e)) {
-                e.hp--; player.vy = -12;
+            e.y = 150 + Math.sin(Date.now()/600) * 100;
+            e.cd++; if(e.cd > 70) { entities.push({x: e.x, y: e.y + 50, vx: -6, type: 'bullet'}); e.cd = 0; }
+            if (player.vy > 0 && checkHit(player, e)) {
+                e.hp--; player.vy = -15;
                 if(e.hp <= 0) entities.splice(i, 1);
-            } else if (rectIntersect(player, e)) { die(); }
+            } else if (checkHit(player, e)) die();
         }
     });
-
-    hazards.forEach(h => { if(rectIntersect(player, h)) die(); });
 }
 
-function rectIntersect(a, b) {
-    return a.x < b.x + (b.w||10) && a.x + a.w > b.x && a.y < b.y + (b.h||10) && a.y + a.h > b.y;
-}
+function checkHit(a, b) { return a.x < b.x + (b.w||10) && a.x + a.w > b.x && a.y < b.y + (b.h||10) && a.y + a.h > b.y; }
 
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save(); ctx.translate(-cameraX, 0);
 
-    // Plattformen
     platforms.forEach(p => {
         ctx.fillStyle = '#5d4037';
         if (p.type === 'ice') ctx.fillStyle = '#81d4fa';
@@ -201,24 +189,18 @@ function draw() {
         if (p.type === 'falling') ctx.fillStyle = '#ffb74d';
         if (p.type === 'goal') ctx.fillStyle = '#4caf50';
         ctx.fillRect(p.x, p.y, p.w, p.h);
-        // Details
-        ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.strokeRect(p.x, p.y, p.w, p.h);
+        ctx.strokeStyle = 'white'; ctx.strokeRect(p.x, p.y, p.w, p.h);
     });
 
-    // Hazards (Spikes)
-    ctx.fillStyle = '#cfd8dc';
-    hazards.forEach(h => { for(let i=0; i<h.w; i+=20) { ctx.beginPath(); ctx.moveTo(h.x+i, h.y+h.h); ctx.lineTo(h.x+i+10, h.y); ctx.lineTo(h.x+i+20, h.y+h.h); ctx.fill(); } });
-
-    // Boss & Projektile
     entities.forEach(e => {
-        if (e.type === 'boss') { ctx.fillStyle = '#000'; ctx.fillRect(e.x, e.y, e.w, e.h); ctx.fillStyle = '#f00'; ctx.fillText("HP: "+e.hp, e.x, e.y-10); }
-        if (e.type === 'bullet') { ctx.fillStyle = '#ffeb3b'; ctx.beginPath(); ctx.arc(e.x, e.y, 8, 0, Math.PI*2); ctx.fill(); }
-        if (e.type === 'cannon') { ctx.fillStyle = '#212121'; ctx.fillRect(e.x, e.y, 30, 30); }
+        if (e.type === 'boss') { ctx.fillStyle = '#000'; ctx.fillRect(e.x, e.y, e.w, e.h); ctx.fillStyle = 'red'; ctx.fillText("HP: "+Math.ceil(e.hp), e.x, e.y-10); }
+        if (e.type === 'bullet') { ctx.fillStyle = 'yellow'; ctx.beginPath(); ctx.arc(e.x, e.y, 8, 0, Math.PI*2); ctx.fill(); }
+        if (e.type === 'cannon') { ctx.fillStyle = '#212121'; ctx.fillRect(e.x, e.y, 35, 35); }
     });
 
     // Johnny
     ctx.fillStyle = '#fdd835'; ctx.fillRect(player.x, player.y, player.w, player.h);
-    ctx.fillStyle = '#3e2723'; ctx.fillRect(player.x-5, player.y, player.w+10, 10); // Cowboyhut
+    ctx.fillStyle = '#3e2723'; ctx.fillRect(player.x-5, player.y, player.w+10, 10);
     ctx.fillRect(player.x+5, player.y-10, player.w-10, 10);
 
     ctx.restore();
