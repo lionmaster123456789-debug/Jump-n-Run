@@ -2,14 +2,13 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Johnny Jumper: Final Master Edition 2026</title>
+    <title>Johnny Jumper: Boss & Belt Update 2026</title>
     <style>
         body { margin: 0; overflow: hidden; background: #1a0f00; font-family: 'Arial Black', sans-serif; color: #fff; }
         canvas { display: block; background: linear-gradient(#4facfe 0%, #00f2fe 100%); margin: auto; border: 6px solid #3e2723; }
         #ui { position: absolute; top: 15px; width: 100%; text-align: center; pointer-events: none; font-size: 28px; text-shadow: 3px 3px #000; z-index: 10; }
         .menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #3e2723; padding: 30px; border: 5px solid #fdd835; text-align: center; border-radius: 20px; z-index: 100; min-width: 350px; }
-        button { background: #fdd835; border: none; padding: 12px 25px; font-weight: bold; cursor: pointer; font-size: 18px; border-radius: 8px; margin: 10px; transition: 0.2s; }
-        button:hover { transform: scale(1.05); background: #fff; }
+        button { background: #fdd835; border: none; padding: 12px 25px; font-weight: bold; cursor: pointer; font-size: 18px; border-radius: 8px; margin: 10px; }
         .shop-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 20px; }
         .skin-item { border: 2px solid #fff; padding: 10px; cursor: pointer; border-radius: 10px; text-align: center; }
         .hidden { display: none !important; }
@@ -32,7 +31,7 @@
 </div>
 
 <div id="game-over" class="menu hidden">
-    <h1 style="color: #ff5252;">DAS WAR'S, PARTNER!</h1>
+    <h1 style="color: #ff5252;">ABGEWORFEN!</h1>
     <p>Gesamte Tode: <span id="death-count-over">0</span></p>
     <button onclick="restartLevel()">ERNEUT VERSUCHEN</button>
     <button onclick="backToMenu()">HAUPTMENÜ</button>
@@ -80,7 +79,6 @@ function setupLevel(lvl) {
     cameraX = 0;
     player.x = 100; player.y = 300; player.vx = 0; player.vy = 0;
 
-    // Fester Startblock
     let lastP = { x: 0, y: 450, w: 400, h: 150, type: 'normal' };
     platforms.push(lastP);
 
@@ -94,30 +92,34 @@ function setupLevel(lvl) {
         let type = themes[Math.floor(Math.random() * themes.length)];
         let gapX = 110 + Math.random() * 90; 
         let diffY = (Math.random() * 100) - 50; 
-        
         let nX = lastP.x + lastP.w + gapX;
         let nY = Math.max(180, Math.min(500, lastP.y + diffY));
         let nW = 150 + Math.random() * 80;
 
         if(type === 'waterfall') {
-            platforms.push({ x: nX, y: 0, w: 80, h: canvas.height, type: 'waterfall', swimY: nY });
-            lastP = { x: nX, y: nY, w: 80, h: 40 }; // Referenz für nächste Plattform
+            platforms.push({ x: nX, y: 0, w: 80, h: canvas.height, type: 'waterfall' });
+            lastP = { x: nX, y: nY, w: 80, h: 40 };
         } else {
             let p = { x: nX, y: nY, w: nW, h: 40, type: type, startY: nY, startX: nX };
             platforms.push(p);
             lastP = p;
-            if (lvl > 3 && Math.random() > 0.8) {
-                entities.push({ x: nX + 20, y: nY - 35, type: 'cannon', cd: 0 });
-            }
+            if (lvl > 3 && Math.random() > 0.8) entities.push({ x: nX + 20, y: nY - 35, type: 'cannon', cd: 0 });
         }
     }
     platforms.push({ x: lastP.x + lastP.w + 150, y: 350, w: 250, h: 300, type: 'goal' });
 }
 
 function setupBoss(lvl) {
-    platforms.push({ x: 500, y: 450, w: 800, h: 50, type: 'normal' });
-    entities.push({ x: 1000, y: 200, w: 120, h: 120, type: 'boss', hp: 3 + Math.floor(lvl/10), cd: 0 });
-    platforms.push({ x: 1600, y: 350, w: 200, h: 300, type: 'goal' });
+    // Boss Arena mit solidem Boden
+    platforms.push({ x: 400, y: 500, w: 1200, h: 100, type: 'normal' });
+    entities.push({ 
+        x: 900, y: 200, w: 100, h: 100, 
+        type: 'boss', 
+        hp: 3 + Math.floor(lvl/10), 
+        cd: 0,
+        baseY: 250 // Tiefere Flugbahn
+    });
+    platforms.push({ x: 1700, y: 350, w: 200, h: 300, type: 'goal' });
 }
 
 function update() {
@@ -137,10 +139,7 @@ function update() {
     player.x += player.vx + player.onBelt;
 
     let steps = 5;
-    player.grounded = false;
-    player.inWater = false;
-    player.onBelt = 0;
-    player.ice = false;
+    player.grounded = false; player.inWater = false; player.onBelt = 0; player.ice = false;
 
     for (let s = 0; s < steps; s++) {
         player.y += player.vy / steps;
@@ -173,10 +172,17 @@ function update() {
         }
         if (e.type === 'bullet') { e.x += e.vx; if (rectHit(player, e)) die(); }
         if (e.type === 'boss') {
-            e.y = 150 + Math.sin(Date.now()/600) * 100;
-            e.cd++; if(e.cd > 70) { entities.push({x: e.x, y: e.y + 50, vx: -6, type: 'bullet'}); e.cd = 0; }
-            if (player.vy > 0 && rectHit(player, e)) { e.hp--; player.vy = -15; if(e.hp <= 0) entities.splice(i, 1); }
-            else if (rectHit(player, e)) die();
+            // Boss fliegt tiefer und greift an
+            e.y = e.baseY + Math.sin(Date.now()/500) * 150; 
+            e.cd++; if(e.cd > 80) { entities.push({x: e.x, y: e.y + 50, vx: -6, type: 'bullet'}); e.cd = 0; }
+            
+            // Treffer auf Boss-Kopf (Spieler fällt und ist über dem Boss)
+            if (player.vy > 0 && player.y + player.h < e.y + 30 && rectHit(player, e)) {
+                e.hp--; player.vy = -15; 
+                if(e.hp <= 0) entities.splice(i, 1);
+            } else if (rectHit(player, e)) {
+                die();
+            }
         }
     });
 }
@@ -191,17 +197,26 @@ function draw() {
         if (p.type === 'waterfall') {
             ctx.fillStyle = 'rgba(0, 180, 255, 0.4)';
             ctx.fillRect(p.x, 0, p.w, canvas.height);
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-            for(let j=0; j<2; j++) ctx.fillRect(p.x + (j*30) + 10, (Date.now()/5)%canvas.height, 4, 40);
         } else {
             ctx.fillStyle = p.type === 'ice' ? '#81d4fa' : (p.type === 'trampoline' ? '#f06292' : (p.type === 'goal' ? '#4caf50' : '#5d4037'));
+            if (p.type.includes('belt')) ctx.fillStyle = '#455a64';
             ctx.fillRect(p.x, p.y, p.w, p.h);
             ctx.strokeStyle = '#fff'; ctx.strokeRect(p.x, p.y, p.w, p.h);
+
+            // Visuelle Pfeile für Förderbänder
+            if (p.type.includes('belt')) {
+                ctx.fillStyle = "white"; ctx.font = "12px Arial";
+                let arrow = p.type === 'belt_right' ? ">>>" : "<<<";
+                for(let j=0; j<p.w; j+=40) ctx.fillText(arrow, p.x + j + 5, p.y + 25);
+            }
         }
     });
 
     entities.forEach(e => {
-        if (e.type === 'boss') { ctx.fillStyle = '#000'; ctx.fillRect(e.x, e.y, e.w, e.h); ctx.fillStyle = 'red'; ctx.fillText("HP: "+e.hp, e.x, e.y-10); }
+        if (e.type === 'boss') { 
+            ctx.fillStyle = '#000'; ctx.fillRect(e.x, e.y, e.w, e.h); 
+            ctx.fillStyle = 'red'; ctx.font = "bold 20px Arial"; ctx.fillText("BOSS HP: "+e.hp, e.x, e.y-15); 
+        }
         if (e.type === 'bullet') { ctx.fillStyle = 'yellow'; ctx.beginPath(); ctx.arc(e.x, e.y, 8, 0, Math.PI*2); ctx.fill(); }
         if (e.type === 'cannon') { ctx.fillStyle = '#212121'; ctx.fillRect(e.x, e.y, 35, 35); }
     });
