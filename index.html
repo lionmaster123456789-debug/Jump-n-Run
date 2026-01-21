@@ -2,24 +2,16 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Johnny Jumper: Shop Edition 2026</title>
+    <title>Johnny Jumper: Final Master Edition 2026</title>
     <style>
         body { margin: 0; overflow: hidden; background: #1a0f00; font-family: 'Arial Black', sans-serif; color: #fff; }
         canvas { display: block; background: linear-gradient(#4facfe 0%, #00f2fe 100%); margin: auto; border: 6px solid #3e2723; }
-        
         #ui { position: absolute; top: 15px; width: 100%; text-align: center; pointer-events: none; font-size: 28px; text-shadow: 3px 3px #000; z-index: 10; }
-        
-        .menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-                background: #3e2723; padding: 30px; border: 5px solid #fdd835; text-align: center; 
-                border-radius: 20px; z-index: 100; min-width: 300px; }
-        
-        button { background: #fdd835; border: none; padding: 12px 25px; font-weight: bold; cursor: pointer; 
-                font-size: 18px; border-radius: 8px; margin: 10px; transition: 0.2s; }
+        .menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #3e2723; padding: 30px; border: 5px solid #fdd835; text-align: center; border-radius: 20px; z-index: 100; min-width: 350px; }
+        button { background: #fdd835; border: none; padding: 12px 25px; font-weight: bold; cursor: pointer; font-size: 18px; border-radius: 8px; margin: 10px; transition: 0.2s; }
         button:hover { transform: scale(1.05); background: #fff; }
-        
         .shop-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 20px; }
-        .skin-item { border: 2px solid #fff; padding: 10px; cursor: pointer; border-radius: 10px; }
-        .skin-item:hover { background: rgba(255,255,255,0.1); }
+        .skin-item { border: 2px solid #fff; padding: 10px; cursor: pointer; border-radius: 10px; text-align: center; }
         .hidden { display: none !important; }
     </style>
 </head>
@@ -27,27 +19,22 @@
 
 <div id="ui">Level: <span id="lvl-txt">1</span> | 💀 Tode: <span id="death-txt">0</span></div>
 
-<!-- Hauptmenü -->
 <div id="main-menu" class="menu">
     <h1>🤠 JOHNNY JUMPER 🤠</h1>
     <button onclick="startGame()">JETZT SPIELEN</button><br>
-    <button onclick="openShop()">ZUM SKIN-SHOP</button>
+    <button onclick="openShop()">SKIN-SHOP</button>
 </div>
 
-<!-- Shop -->
 <div id="skin-shop" class="menu hidden">
-    <h1>KLARENS GARDEROBE</h1>
-    <p>Wähle einen gratis Skin:</p>
+    <h1>GRATIS SKINS</h1>
     <div class="shop-grid" id="shop-list"></div>
-    <br>
-    <button onclick="closeShop()">ZURÜCK ZUM MENÜ</button>
+    <button onclick="closeShop()">ZURÜCK</button>
 </div>
 
-<!-- Game Over -->
 <div id="game-over" class="menu hidden">
     <h1 style="color: #ff5252;">DAS WAR'S, PARTNER!</h1>
-    <p>Tode in diesem Versuch: <span id="death-count-over">0</span></p>
-    <button onclick="restartLevel()">ERNEUTER VERSUCH</button>
+    <p>Gesamte Tode: <span id="death-count-over">0</span></p>
+    <button onclick="restartLevel()">ERNEUT VERSUCHEN</button>
     <button onclick="backToMenu()">HAUPTMENÜ</button>
 </div>
 
@@ -56,8 +43,7 @@
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-canvas.width = 1100;
-canvas.height = 600;
+canvas.width = 1100; canvas.height = 600;
 
 const GRAVITY = 0.7;
 const FRICTION = 0.85;
@@ -79,7 +65,7 @@ let platforms = [];
 let entities = [];
 
 const skins = [
-    { name: "Default", color: "#fdd835", shape: "rect" },
+    { name: "Johnny", color: "#fdd835", shape: "rect" },
     { name: "Ghost", color: "#fff", shape: "rect" },
     { name: "Slime", color: "#00ff00", shape: "circle" },
     { name: "Goldy", color: "#f1c40f", shape: "star" },
@@ -94,37 +80,44 @@ function setupLevel(lvl) {
     cameraX = 0;
     player.x = 100; player.y = 300; player.vx = 0; player.vy = 0;
 
-    platforms.push({ x: 0, y: 450, w: 400, h: 300, type: 'normal' });
+    // Fester Startblock
+    let lastP = { x: 0, y: 450, w: 400, h: 150, type: 'normal' };
+    platforms.push(lastP);
 
-    if (lvl % 10 === 0) { setupBoss(lvl); return; }
+    if (lvl % 10 === 0) {
+        setupBoss(lvl);
+        return;
+    }
 
-    let lastP = platforms;
-    for (let i = 0; i < 15 + lvl; i++) {
+    let levelLength = 10 + lvl;
+    for (let i = 0; i < levelLength; i++) {
         let type = themes[Math.floor(Math.random() * themes.length)];
         let gapX = 110 + Math.random() * 90; 
         let diffY = (Math.random() * 100) - 50; 
         
         let nX = lastP.x + lastP.w + gapX;
         let nY = Math.max(180, Math.min(500, lastP.y + diffY));
-        let nW = 150 + Math.random() * 100;
+        let nW = 150 + Math.random() * 80;
 
-        // Wasserfall geht von oben (0) bis unten (600)
-        if(type === 'waterfall') nW = 80;
-
-        platforms.push({ x: nX, y: type === 'waterfall' ? 0 : nY, w: nW, h: type === 'waterfall' ? 1000 : 40, type: type, realY: nY });
-        
-        if (lvl > 3 && Math.random() > 0.8 && type !== 'waterfall') {
-            entities.push({ x: nX + 20, y: nY - 35, type: 'cannon', cd: 0 });
+        if(type === 'waterfall') {
+            platforms.push({ x: nX, y: 0, w: 80, h: canvas.height, type: 'waterfall', swimY: nY });
+            lastP = { x: nX, y: nY, w: 80, h: 40 }; // Referenz für nächste Plattform
+        } else {
+            let p = { x: nX, y: nY, w: nW, h: 40, type: type, startY: nY, startX: nX };
+            platforms.push(p);
+            lastP = p;
+            if (lvl > 3 && Math.random() > 0.8) {
+                entities.push({ x: nX + 20, y: nY - 35, type: 'cannon', cd: 0 });
+            }
         }
-        lastP = platforms[platforms.length-1];
     }
-    platforms.push({ x: lastP.x + lastP.w + 150, y: 350, w: 200, h: 350, type: 'goal' });
+    platforms.push({ x: lastP.x + lastP.w + 150, y: 350, w: 250, h: 300, type: 'goal' });
 }
 
 function setupBoss(lvl) {
     platforms.push({ x: 500, y: 450, w: 800, h: 50, type: 'normal' });
-    entities.push({ x: 1000, y: 200, w: 120, h: 120, type: 'boss', hp: 3 + (lvl/10), cd: 0 });
-    platforms.push({ x: 1600, y: 350, w: 100, h: 350, type: 'goal' });
+    entities.push({ x: 1000, y: 200, w: 120, h: 120, type: 'boss', hp: 3 + Math.floor(lvl/10), cd: 0 });
+    platforms.push({ x: 1600, y: 350, w: 200, h: 300, type: 'goal' });
 }
 
 function update() {
@@ -135,7 +128,7 @@ function update() {
     player.vx *= (player.ice ? 0.98 : FRICTION);
     
     if (player.inWater) {
-        player.vy = 1.5; 
+        player.vy = 2; 
         if (keys['Space'] || keys['ArrowUp'] || keys['KeyW']) player.vy = -7;
     } else {
         player.vy += GRAVITY;
@@ -151,20 +144,11 @@ function update() {
 
     for (let s = 0; s < steps; s++) {
         player.y += player.vy / steps;
-        
         for (let p of platforms) {
             if (player.x + player.w > p.x && player.x < p.x + p.w && player.y + player.h > p.y && player.y < p.y + p.h) {
-                
-                if (p.type === 'waterfall') {
-                    player.inWater = true;
-                    continue; 
-                }
-                
-                // Landung
+                if (p.type === 'waterfall') { player.inWater = true; continue; }
                 if (player.vy >= 0 && player.y + player.h <= p.y + 20) {
-                    player.y = p.y - player.h;
-                    player.vy = 0;
-                    player.grounded = true;
+                    player.y = p.y - player.h; player.vy = 0; player.grounded = true;
                     if (p.type === 'ice') player.ice = true;
                     if (p.type === 'belt_right') player.onBelt = 4;
                     if (p.type === 'belt_left') player.onBelt = -4;
@@ -181,11 +165,11 @@ function update() {
     }
 
     cameraX = Math.max(cameraX, player.x - 300);
-    if (player.y > canvas.height + 100) die();
+    if (player.y > canvas.height + 200) die();
 
     entities.forEach((e, i) => {
         if (e.type === 'cannon') {
-            e.cd++; if(e.cd > 110) { entities.push({x: e.x, y: e.y, vx: -7, type: 'bullet'}); e.cd = 0; }
+            e.cd++; if(e.cd > 100) { entities.push({x: e.x, y: e.y, vx: -7, type: 'bullet'}); e.cd = 0; }
         }
         if (e.type === 'bullet') { e.x += e.vx; if (rectHit(player, e)) die(); }
         if (e.type === 'boss') {
@@ -217,36 +201,28 @@ function draw() {
     });
 
     entities.forEach(e => {
-        if (e.type === 'boss') { ctx.fillStyle = '#000'; ctx.fillRect(e.x, e.y, e.w, e.h); }
-        if (e.type === 'bullet') { ctx.fillStyle = '#f1c40f'; ctx.beginPath(); ctx.arc(e.x, e.y, 8, 0, Math.PI*2); ctx.fill(); }
+        if (e.type === 'boss') { ctx.fillStyle = '#000'; ctx.fillRect(e.x, e.y, e.w, e.h); ctx.fillStyle = 'red'; ctx.fillText("HP: "+e.hp, e.x, e.y-10); }
+        if (e.type === 'bullet') { ctx.fillStyle = 'yellow'; ctx.beginPath(); ctx.arc(e.x, e.y, 8, 0, Math.PI*2); ctx.fill(); }
         if (e.type === 'cannon') { ctx.fillStyle = '#212121'; ctx.fillRect(e.x, e.y, 35, 35); }
     });
 
     ctx.fillStyle = player.color;
-    if (player.shape === 'circle') {
-        ctx.beginPath(); ctx.arc(player.x + player.w/2, player.y + player.h/2, player.w/2, 0, Math.PI*2); ctx.fill();
-    } else if (player.shape === 'star') {
-        drawStar(player.x + player.w/2, player.y + player.h/2, 5, 25, 10);
-    } else {
-        ctx.fillRect(player.x, player.y, player.w, player.h);
-    }
-    
-    ctx.fillStyle = '#3e2723';
-    ctx.fillRect(player.x-5, player.y, player.w+10, 10);
-    ctx.fillRect(player.x+5, player.y-10, player.w-10, 10);
+    if (player.shape === 'circle') { ctx.beginPath(); ctx.arc(player.x+player.w/2, player.y+player.h/2, player.w/2, 0, Math.PI*2); ctx.fill(); }
+    else if (player.shape === 'star') { drawStar(player.x+player.w/2, player.y+player.h/2, 5, 25, 10); }
+    else ctx.fillRect(player.x, player.y, player.w, player.h);
 
+    ctx.fillStyle = '#3e2723'; ctx.fillRect(player.x-5, player.y, player.w+10, 10); ctx.fillRect(player.x+5, player.y-10, player.w-10, 10);
     ctx.restore();
 }
 
 function drawStar(cx, cy, spikes, outerRadius, innerRadius) {
-    let rot = Math.PI / 2 * 3; let x = cx; let y = cy; let step = Math.PI / spikes;
-    ctx.beginPath(); ctx.moveTo(cx, cy - outerRadius);
-    for (i = 0; i < spikes; i++) {
-        x = cx + Math.cos(rot) * outerRadius; y = cy + Math.sin(rot) * outerRadius;
-        ctx.lineTo(x, y); rot += step; x = cx + Math.cos(rot) * innerRadius;
-        y = cy + Math.sin(rot) * innerRadius; ctx.lineTo(x, y); rot += step;
+    let rot = Math.PI/2*3; let step = Math.PI/spikes;
+    ctx.beginPath(); ctx.moveTo(cx, cy-outerRadius);
+    for(i=0; i<spikes; i++) {
+        ctx.lineTo(cx+Math.cos(rot)*outerRadius, cy+Math.sin(rot)*outerRadius); rot+=step;
+        ctx.lineTo(cx+Math.cos(rot)*innerRadius, cy+Math.sin(rot)*innerRadius); rot+=step;
     }
-    ctx.lineTo(cx, cy - outerRadius); ctx.closePath(); ctx.fill();
+    ctx.closePath(); ctx.fill();
 }
 
 function initShop() {
@@ -255,44 +231,23 @@ function initShop() {
     skins.forEach(s => {
         let item = document.createElement('div');
         item.className = 'skin-item';
-        item.style.borderColor = s.color;
         item.innerHTML = `<div style="width:30px;height:30px;background:${s.color};margin:auto"></div><small>${s.name}</small>`;
-        item.onclick = () => { player.color = s.color; player.shape = s.shape; alert(s.name + " ausgewählt!"); };
+        item.onclick = () => { player.color = s.color; player.shape = s.shape; };
         list.appendChild(item);
     });
 }
 
-// UI LOGIK
-function startGame() { 
-    document.getElementById('main-menu').classList.add('hidden'); 
-    gameState = 'PLAY'; 
-    setupLevel(currentLevel); 
-    requestAnimationFrame(gameLoop); 
-}
+function startGame() { document.getElementById('main-menu').classList.add('hidden'); gameState = 'PLAY'; setupLevel(currentLevel); requestAnimationFrame(gameLoop); }
 function openShop() { document.getElementById('main-menu').classList.add('hidden'); document.getElementById('skin-shop').classList.remove('hidden'); }
 function closeShop() { document.getElementById('skin-shop').classList.add('hidden'); document.getElementById('main-menu').classList.remove('hidden'); }
-function die() { 
-    deaths++; 
-    document.getElementById('death-txt').innerText = deaths;
-    document.getElementById('death-count-over').innerText = deaths;
-    gameState = 'OVER'; 
-    document.getElementById('game-over').classList.remove('hidden'); 
-}
+function die() { deaths++; document.getElementById('death-txt').innerText = deaths; document.getElementById('death-count-over').innerText = deaths; gameState = 'OVER'; document.getElementById('game-over').classList.remove('hidden'); }
 function nextLevel() { currentLevel++; document.getElementById('lvl-txt').innerText = currentLevel; setupLevel(currentLevel); }
 function restartLevel() { document.getElementById('game-over').classList.add('hidden'); gameState = 'PLAY'; setupLevel(currentLevel); }
 function backToMenu() { document.getElementById('game-over').classList.add('hidden'); document.getElementById('main-menu').classList.remove('hidden'); gameState = 'MENU'; }
-
-function gameLoop() { 
-    if (gameState === 'PLAY' || gameState === 'OVER') {
-        update(); 
-        draw(); 
-        requestAnimationFrame(gameLoop); 
-    }
-}
+function gameLoop() { if (gameState === 'PLAY' || gameState === 'OVER') { update(); draw(); requestAnimationFrame(gameLoop); } }
 
 window.addEventListener('keydown', e => keys[e.code] = true);
 window.addEventListener('keyup', e => keys[e.code] = false);
-
 initShop();
 </script>
 </body>
